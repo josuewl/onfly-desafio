@@ -4,7 +4,7 @@
 
 - **Ferramenta:** Claude Code (extensão para VS Code)
 - **Modelo:** Claude Opus 5.5 (`claude-opus-5-5`)
-- **Sessão:** exportação em `sessao.md`, nesta pasta
+- **Sessão:** exportação em `sessao.txt`, nesta pasta
 
 ## O que eu fiz (sem IA)
 

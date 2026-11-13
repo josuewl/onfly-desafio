@@ -1,0 +1,531 @@
+
+> <ide_opened_file>The user opened the file c:\www\html\onfly-desafio\README.md
+  in the IDE. This may or may not be related to the current
+  task.</ide_opened_file>
+
+> De acordo com o @README.md, como posso chegar em um solução pra aplicação?
+  ⎿  Read README.md (243 lines)
+
+● Vou primeiro olhar o código e o estado atual (você já tem alguns commits de
+  correção) para te dar um caminho concreto.
+
+  Searched for 1 pattern, ran 1 shell command (ctrl+o to expand)
+
+● O projeto é pequeno; vou ler todo o código-fonte e os testes.
+
+  Read 20 files (ctrl+o to expand)
+
+● Já tenho o quadro do código. Agora vou rodar os testes, o CLI na amostra de
+  validação e inspecionar o dataset real em busca de armadilhas.
+
+  Ran 2 shell commands (ctrl+o to expand)
+
+● Testes passam (5/5) e a amostra de validação bate com o README. Mas a amostra
+  tem só 12 linhas e o dataset real tem 300 — vou comparar o CLI com um cálculo
+  independente no arquivo completo.
+
+  Made 1 scratchpad edit +83, ran 1 shell command (ctrl+o to expand)
+
+● Achei um defeito que os testes não pegam. Vou checar também se o float que
+  ficou no conversor causa diferença real nos números.
+
+  Ran 2 shell commands (ctrl+o to expand)
+
+● Seu estado atual passa nos testes e na amostra de validação, mas ainda gera
+  números errados no dataset real. Os testes e a amostra cobrem só uma parte dos
+  casos, como o próprio README avisa ("A amostra cobre apenas parte dos
+  cenários").
+
+  Como validar
+
+  O README dá três checagens, e só as duas primeiras estão cobertas hoje:
+
+  1. pytest -q: 5 passaram.
+  2. Amostra exemplo-validacao.csv: bate com a tabela do README.
+  3. Regras de negócio aplicadas ao reservas_hoteis.csv, com 300 linhas: aqui
+     falha.
+
+  Para fazer a terceira, escrevi um script que calcula o relatório direto das
+  regras do README, sem usar o código do CLI, e compara com a saída do CLI:
+  C:\Users\JOSUE~1.ALM\AppData\Local\Temp\claude\9a37f37e444daf5d\170bf0dc-c0e7-
+  4453-bff6-fcc0f42c804a\scratchpad\conferencia.py
+
+  ┌─────────────────────────────────┬───────────────┬───────────────┐
+  │              Campo              │   Esperado    │   CLI hoje    │
+  ├─────────────────────────────────┼───────────────┼───────────────┤
+  │ total_reservations              │ 300           │ 200           │
+  ├─────────────────────────────────┼───────────────┼───────────────┤
+  │ confirmed / cancelled / no_show │ 235 / 31 / 34 │ 153 / 22 / 25 │
+  ├─────────────────────────────────┼───────────────┼───────────────┤
+  │ total_room_nights               │ 1347          │ 909           │
+  ├─────────────────────────────────┼───────────────┼───────────────┤
+  │ total_amount_brl                │ 396170.00     │ 249543.79     │
+  ├─────────────────────────────────┼───────────────┼───────────────┤
+  │ average_nightly_rate_brl        │ 294.11        │ 274.53        │
+  └─────────────────────────────────┴───────────────┴───────────────┘
+
+  Com isso, by_month e top_hotels também saem errados.
+
+  Defeitos que ainda faltam
+
+  1. A leitura do CSV para em 200 linhas. Em csv_reservation_repository.py:47-48
+  (src/onfly_report/repositories/csv_reservation_repository.py#L47-L48), o if
+  len(rows) == 200: break descarta as reservas seguintes sem avisar. Isso
+  contraria a regra "total_reservations = número de reservas no arquivo". Os
+  testes e a amostra têm menos de 200 linhas, por isso não pegam o problema.
+  Correção: remover o limite.
+
+  2. Ainda tem float na conversão de moeda. Em currency_converter.py:11
+  (src/onfly_report/services/currency_converter.py#L11), seu commit trocou a
+  divisão pela multiplicação, mas a conta continua passando por float. O README
+  exige "Use Decimal, nunca float". No dataset, 23 das 300 conversões dão um
+  valor diferente do exato. Um caso que reproduz o erro: USD 0.75 × 5.42 deveria
+  dar "4.07" e o CLI gera "4.06", porque o float produz 4.0649999… e o
+  arredondamento half-up vai para baixo. Correção: return amount *
+  rates[currency].
+
+  3. Desempate do top_hotels. A alteração ainda não commitada em
+  report_builder.py:91 (src/onfly_report/services/report_builder.py#L91), com
+  -item[1]["amount"], item[0], está correta. A versão commitada com reverse=True
+  também invertia o desempate, deixando hotel_id em ordem decrescente, e a
+  regra pede crescente. Só que o README-ENTREGA.md (entrega/README-ENTREGA.md)
+  ainda descreve a solução com reverse=True, então precisa ser atualizado.
+
+  Testes novos sugeridos
+
+  Testes adicionais contam na avaliação, e cada defeito deveria ganhar um teste
+  que falha antes da correção:
+  - um CSV com mais de 200 linhas, conferindo total_reservations;
+  - USD 0.75 resultando em total_amount_brl == "4.07";
+  - dois hotéis com o mesmo valor, aparecendo em ordem crescente de hotel_id;
+  - check-in e check-out na virada do ano, por exemplo de 2024-12-30 a
+    2025-01-02, resultando em 3 noites;
+  - só reservas canceladas ou no-show: average_nightly_rate_brl == "0.00" e
+    by_month/top_hotels vazios;
+  - --top 0 saindo com código 2.
+
+  O que falta na entrega
+
+  - README-ENTREGA.md: faltam os defeitos 1 e 2, a correção do item 3 e as
+    seções "como validar" e "resultado do pytest".
+  - entrega/uso-de-ia/: como você está usando IA, inclua a exportação desta
+    sessão (/export) e um declaracao.md com a ferramenta e o modelo (Claude
+    Code, Claude Opus 5.5) e a divisão entre o que a IA fez e o que você fez.
+
+  Não alterei nenhum arquivo do projeto. Quer que eu aplique as correções 1 e 2
+  e escreva os testes, ou prefere fazer você mesmo e usar o script de
+  conferência para validar?
+
+> Aplique as correções, escreva o arquivo para uso de Ia
+
+● Vou seguir esta ordem: primeiro os testes que reproduzem os defeitos, para
+  vê-los falhar; depois as correções; por fim a validação e a declaração. Antes,
+  vejo a configuração do pytest.
+
+  Read 1 file, ran 1 shell command (ctrl+o to expand)
+
+● Agora escrevo os testes novos. Eles cobrem os defeitos 1, 2 e 3, o dataset
+  completo e duas regras do README que ainda não tinham teste.
+
+● Write(tests\test_defeitos_adicionais.py)
+  ⎿  Wrote 146 lines to tests\test_defeitos_adicionais.py
+      1 """Testes adicionais: defeitos não cobertos pelos testes fornecid
+        os e regras do README."""
+      2
+      3 from __future__ import annotations
+      4
+      5 import json
+      6 import os
+      7 import subprocess
+      8 import sys
+      9 from pathlib import Path
+     … +137 lines (ctrl+o to expand)
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Os testes de truncamento, câmbio e dataset completo falham como esperado, e o
+  de desempate já passa graças à sua alteração não commitada. Vou aplicar as
+  correções agora. · summary
+
+● Update(src\onfly_report\repositories\csv_reservation_repository.py)
+  ⎿  Added 1 line, removed 6 lines
+      41                  if missing:
+      42                      raise InputFileError(f"colunas obrigatórias
+           ausentes: {', '.join(missing)}")
+      43  
+      44 -                rows: list[RawRow] = []                        
+      45 -                for values in reader:                          
+      46 -                    rows.append(RawRow(line_number=reader.line_
+         -num, values=values))                                           
+      47 -                    if len(rows) == 200:                       
+      48 -                        break                                  
+      49 -                return rows                                    
+      44 +                return [RawRow(line_number=reader.line_num, val
+         +ues=values) for values in reader]                              
+      45          except FileNotFoundError as err:
+      46              raise InputFileError(f"arquivo de reservas não enco
+          ntrado: {self._path}") from err
+      47          except (OSError, csv.Error) as err:
+
+● Update(src\onfly_report\services\currency_converter.py)
+  ⎿  Added 1 line, removed 2 lines
+       7  
+       8  def convert_to_brl(amount: Decimal, currency: str, rates: dict[
+          str, Decimal]) -> Decimal:
+       9      """Converte um valor na moeda informada para BRL usando a t
+          axa da tabela."""
+      10 -    rate = rates[currency]                                     
+      11 -    return Decimal(str(float(amount) * float(rate)))           
+      10 +    return amount * rates[currency]                            
+
+● Agora rodo a validação completa: a suíte inteira, o comando oficial do README,
+  a amostra de validação e a conferência independente.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Todos os testes e checagens passaram: 11 testes, 300 reservas somando R$
+  396170.00, conferência independente batendo e o ruff limpo. Agora vou escrever
+  a declaração de uso de IA. · summary
+
+● Write(entrega\uso-de-ia\declaracao.md)
+  ⎿  Wrote 41 lines to entrega\uso-de-ia\declaracao.md
+      1 # Declaração de uso de IA
+      2
+      3 ## Ferramenta e modelo
+      4
+      5 - **Ferramenta:** Claude Code (extensão para VS Code)
+      6 - **Modelo:** Claude Opus 5.5 (`claude-opus-5-5`)
+      7 - **Sessão:** exportação em `sessao.md`, nesta pasta
+      8
+      9 ## O que eu fiz (sem IA)
+     … +32 lines (ctrl+o to expand)
+
+● Apliquei as duas correções que faltavam e escrevi a declaração de uso de IA.
+  Os 11 testes passam (os 5 fornecidos e 6 novos), e o relatório do dataset
+  completo bate com o cálculo independente que fiz direto das regras do README.
+
+  Correções
+  - csv_reservation_repository.py
+    (src/onfly_report/repositories/csv_reservation_repository.py): removi o
+    limite que parava a leitura em 200 linhas. Agora o arquivo é lido inteiro.
+  - currency_converter.py (src/onfly_report/services/currency_converter.py): a
+    conversão virou amount * rates[currency], toda em Decimal, sem passar por
+    float.
+
+  Testes novos, em tests/test_defeitos_adicionais.py
+  - Leitura de 250 linhas, para o defeito do limite de 200.
+  - USD 0.75 resultando em "4.07", para o defeito do float.
+  - Desempate no top_hotels por hotel_id em ordem crescente.
+  - Virada de ano agrupada pelo mês do check-in.
+  - Relatório sem nenhuma reserva CONFIRMED.
+  - Relatório completo do dataset real com 300 linhas.
+
+  Antes das correções, 3 desses testes falharam: o do limite, o do câmbio e o do
+  dataset completo. O teste de desempate já passava porque a sua alteração não
+  commitada no report_builder.py já corrige isso.
+
+  Validação
+  - pytest -q: 11 passaram.
+  - O comando oficial gera output/report.json com 300 reservas, 1347 noites e R$
+    396170.00.
+  - A amostra de validação continua batendo com o README.
+  - --top 0 sai com código 2.
+  - O ruff não aponta problemas.
+
+  Declaração de uso de IA — escrita para o time avaliador da Onfly:
+  entrega/uso-de-ia/declaracao.md
+
+  Revise dois pontos antes de entregar, porque escrevi em primeira pessoa no seu
+  nome:
+  - A seção "O que eu fiz (sem IA)" foi montada a partir do histórico do git e
+    da alteração que já estava no seu código. Se você usou IA antes desta
+    sessão, precisa declarar também.
+  - A frase "Revisei as alterações sugeridas pela IA" só vale se você de fato
+    revisar o diff.
+
+  O que ainda falta
+  1. sessao.md: rode /export e salve em entrega/uso-de-ia/sessao.md. Se a
+     extensão do VS Code não tiver esse comando, abra a sessão no terminal com
+     claude --resume e rode /export lá. Eu não consigo fazer isso por você.
+  2. README-ENTREGA.md: ainda faltam os dois defeitos novos, a correção do texto
+     do reverse=True e as seções "como validar" e "resultado do pytest". Posso
+     escrever isso, se quiser.
+  3. Commits e push: não fiz nenhum. As alterações estão no seu código, prontas
+     para você revisar e commitar.
+
+> <ide_selection>The user selected the lines 14 to 14 from
+  c:\www\html\onfly-desafio\tests\test_defeitos_adicionais.py:
+  run_cli_on_files
+
+  This may or may not be related to the current task.</ide_selection>
+
+> Em @tests/test_defeitos_adicionais.py você adicionou run_cli_on_files, use o
+  @tests/helpers.py ja fornecido
+  ⎿  Read tests\test_defeitos_adicionais.py (147 lines)
+  ⎿  Read tests\helpers.py (97 lines)
+
+● Dá para usar o run_cli direto. Basta ler as linhas do data/reservas_hoteis.csv
+  e passá-las para ele: como cada linha já tem todas as colunas, o {**BASE,
+  **row} não muda nada. A tabela de câmbio que o run_cli grava (BRL 1, USD 5.42,
+  EUR 5.88) é igual à de data/taxas_cambio.csv.
+
+● Update(tests\test_defeitos_adicionais.py)  ⎿  Added 2 lines, removed 33 lines
+       2  
+       3  from __future__ import annotations
+       4  
+       5 -import json                                                    
+       6 -import os                                                      
+       7 -import subprocess                                              
+       8 -import sys                                                     
+       9 -from pathlib import Path                                       
+       5 +import csv                                                     
+       6  
+      11 -from helpers import PROJECT_ROOT, SRC_DIR, run_cli             
+       7 +from helpers import PROJECT_ROOT, run_cli                      
+       8  
+       9  
+      14 -def run_cli_on_files(input_path: Path, rates_path: Path, output
+         -_path: Path) -> dict:                                          
+      15 -    """Executa o CLI sobre arquivos já existentes (ex.: o datas
+         -et real) e devolve o relatório."""                             
+      16 -    environment = os.environ.copy()                            
+      17 -    environment["PYTHONPATH"] = str(SRC_DIR) + os.pathsep + env
+         -ironment.get("PYTHONPATH", "")                                 
+      18 -    environment["PYTHONDONTWRITEBYTECODE"] = "1"               
+      19 -    process = subprocess.run(                                  
+      20 -        [                                                      
+      21 -            sys.executable,                                    
+      22 -            "-m",                                              
+      23 -            "onfly_report",                                    
+      24 -            "--input",                                         
+      25 -            str(input_path),                                   
+      26 -            "--rates",                                         
+      27 -            str(rates_path),                                   
+      28 -            "--output",                                        
+      29 -            str(output_path),                                  
+      30 -        ],                                                     
+      31 -        cwd=str(PROJECT_ROOT),                                 
+      32 -        env=environment,                                       
+      33 -        capture_output=True,                                   
+      34 -        text=True,                                             
+      35 -        timeout=60,                                            
+      36 -    )                                                          
+      37 -    assert process.returncode == 0, process.stderr             
+      38 -    return json.loads(output_path.read_text(encoding="utf-8")) 
+      39 -                                                               
+      40 -                                                               
+      10  def test_reads_every_row_of_the_file(tmp_path):
+      11      """Defeito 1: o repositório parava de ler após 200 linhas, 
+          descartando reservas."""
+      12      rows = [{"reservation_id": f"R-{index}"} for index in range
+          (1, 251)]
+
+● Update(tests\test_defeitos_adicionais.py)
+  ⎿  Added 9 lines, removed 6 lines
+      79  
+      80  
+      81  def test_full_dataset_report(tmp_path):
+      82 -    """Regressão no dataset real (300 linhas); valores conferid
+         -os por cálculo independente das regras do README."""           
+      83 -    report = run_cli_on_files(                                 
+      84 -        PROJECT_ROOT / "data" / "reservas_hoteis.csv",         
+      85 -        PROJECT_ROOT / "data" / "taxas_cambio.csv",            
+      86 -        tmp_path / "report.json",                              
+      87 -    )                                                          
+      82 +    """Regressão no dataset real (300 linhas); valores conferid
+         +os por cálculo independente das regras do README.              
+      83  
+      84 +    As linhas do CSV real já trazem todas as colunas, então o r
+         +un_cli não aplica nenhum valor do BASE; e a                    
+      85 +    tabela de câmbio que ele grava é idêntica a data/taxas_camb
+         +io.csv.                                                        
+      86 +    """                                                        
+      87 +    with (PROJECT_ROOT / "data" / "reservas_hoteis.csv").open(e
+         +ncoding="utf-8", newline="") as handle:                        
+      88 +        rows = list(csv.DictReader(handle))                    
+      89 +                                                               
+      90 +    report = run_cli(tmp_path, rows)                           
+      91 +                                                               
+      92      assert report["report_version"] == "1.0"
+      93      assert report["generated_at"].endswith("-03:00")
+      94      assert report["summary"] == {
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Removi o run_cli_on_files e agora todos os testes de
+  tests/test_defeitos_adicionais.py usam o run_cli do helpers.py, sem nenhuma
+  mudança no helpers.py.
+
+  O teste do dataset completo agora lê as 300 linhas de data/reservas_hoteis.csv
+  e as passa para o run_cli. Saíram também os imports que só a função removida
+  usava.
+
+  Um efeito dessa troca: o teste do dataset completo não lê mais o arquivo
+  data/taxas_cambio.csv. Ele usa a tabela que o run_cli grava, que tem os mesmos
+  valores. Isso está registrado na docstring do teste.
+
+  pytest -q: 11 passaram, e o ruff não aponta problemas. O aviso da IDE sobre
+  run_cli_on_files não definido apareceu entre uma edição e outra e não vale
+  para a versão final.
+
+> seguindo o padrão do projeto, onde cada test é alocado em um arquivo
+  separado, siga essa organização estrutural
+
+● Vou separar os 6 testes em arquivos próprios, no mesmo formato dos fornecidos:
+  docstring do módulo, from helpers import run_cli e uma função de teste por
+  arquivo. A docstring de cada módulo começa com "Testes adicionais:" para
+  diferenciar dos fornecidos.
+
+● Write(tests\test_input_reading.py)
+  ⎿  Wrote 15 lines to tests\test_input_reading.py
+       1 """Testes adicionais: leitura completa do arquivo de reservas.""
+         "
+       2
+       3 from helpers import run_cli
+       4
+       5
+       6 def test_reads_every_row_of_the_file(tmp_path):
+       7     """O repositório parava de ler após 200 linhas, descartando
+         reservas."""
+       8     rows = [{"reservation_id": f"R-{index}"} for index in range(
+     … +8 lines (ctrl+o to expand)
+
+● Write(tests\test_currency_precision.py)
+  ⎿  Wrote 12 lines to tests\test_currency_precision.py
+       1 """Testes adicionais: precisão da conversão para BRL."""
+       2
+       3 from helpers import run_cli
+       4
+       5
+       6 def test_currency_conversion_is_exact_decimal(tmp_path):
+       7     """A conversão passava por float; 0.75 * 5.42 = 4.065 virava
+          4.0649999... e arredondava para 4.06."""
+       8     report = run_cli(tmp_path, [{"reservation_id": "R-1", "curre
+         ncy": "USD", "amount": "0.75"}])
+     … +4 lines (ctrl+o to expand)
+
+● Write(tests\test_top_hotels_tiebreak.py)
+  ⎿  Wrote 17 lines to tests\test_top_hotels_tiebreak.py
+       1 """Testes adicionais: desempate do ranking de hotéis."""
+       2
+       3 from helpers import run_cli
+       4
+       5
+       6 def test_top_hotels_tie_is_broken_by_hotel_id_ascending(tmp_path
+         ):
+       7     """Com reverse=True o desempate por hotel_id ficava decresce
+         nte."""
+       8     report = run_cli(
+     … +9 lines (ctrl+o to expand)
+
+● Write(tests\test_nights_year_boundary.py)
+  ⎿  Wrote 16 lines to tests\test_nights_year_boundary.py
+       1 """Testes adicionais: noites de quarto na virada de ano."""
+       2
+       3 from helpers import run_cli
+       4
+       5
+       6 def test_nights_across_year_boundary_use_checkin_month(tmp_path)
+         :
+       7     """Noites na virada de ano e agrupamento pelo mês do check-i
+         n."""
+       8     report = run_cli(
+     … +8 lines (ctrl+o to expand)
+
+● Write(tests\test_no_billable_reservations.py)
+  ⎿  Wrote 26 lines to tests\test_no_billable_reservations.py
+       1 """Testes adicionais: relatório sem reservas faturáveis."""
+       2
+       3 from helpers import run_cli
+       4
+       5
+       6 def test_report_without_billable_reservations(tmp_path):
+       7     """Sem CONFIRMED: contagens preenchidas, valores zerados e m
+         édia "0.00"."""
+       8     report = run_cli(
+       9         tmp_path,
+     … +17 lines (ctrl+o to expand)
+
+● Write(tests\test_full_dataset_report.py)
+  ⎿  Wrote 45 lines to tests\test_full_dataset_report.py
+      1 """Testes adicionais: regressão ponta a ponta no dataset real."""
+      2
+      3 import csv
+      4
+      5 from helpers import PROJECT_ROOT, run_cli
+      6
+      7
+      8 def test_full_dataset_report(tmp_path):
+      9     """Dataset real (300 linhas); valores conferidos por cálculo
+        independente das regras do README.
+     … +36 lines (ctrl+o to expand)
+
+● Agora removo o arquivo antigo, atualizo a referência na declaração e rodo a
+  suíte.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Update(entrega\uso-de-ia\declaracao.md)
+  ⎿  Added 1 line, removed 1 line
+      30     - `convert_to_brl` ainda calculava em `float`. Isso fazia 23
+           das 300 conversões divergirem do valor exato; por exemplo, USD
+           0.75 × 5.42 = 4.065 virava `4.0649999…` e arredondava para `4.
+          06` em vez de `4.07`.
+      31     - A IA também apontou que o `reverse=True` do commit `625574
+          8` invertia o desempate e que a minha troca para `(-total, hote
+          l_id)` estava correta.
+      32  4. **Testes e correções**, a meu pedido:
+      33 -   - escreveu `tests/test_defeitos_adicionais.py` com 6 testes 
+         -e confirmou que 3 deles falhavam antes da correção;            
+      33 +   - escreveu 6 testes adicionais, um por arquivo, seguindo o p
+         +adrão dos testes fornecidos: `test_input_reading.py`, `test_cur
+         +rency_precision.py`, `test_top_hotels_tiebreak.py`, `test_night
+         +s_year_boundary.py`, `test_no_billable_reservations.py` e `test
+         +_full_dataset_report.py`. Confirmou que 3 deles falhavam antes 
+         +da correção;                                                   
+      34     - removeu o limite de 200 linhas no repositório de reservas;
+      35     - trocou a conversão por `amount * rates[currency]`, inteira
+          mente em `Decimal`.
+      36  5. **Validação:** `pytest -q` com 11 testes passando, o comando
+           oficial gerando `output/report.json`, a conferência independen
+          te igual nos dois CSVs, `--top 0` saindo com código 2 e `ruff` 
+          sem apontamentos.
+
+● Os 6 testes adicionais agora ficam um em cada arquivo, como os fornecidos, e
+  test_defeitos_adicionais.py foi removido. pytest -q continua com 11 testes
+  passando e o ruff sem apontamentos.
+
+  ┌──────────────────────────────────────────────────┬──────────────────────┐
+  │                     Arquivo                      │     O que testa      │
+  ├──────────────────────────────────────────────────┼──────────────────────┤
+  │ test_input_reading.py                            │ leitura de todas as  │
+  │ (tests/test_input_reading.py)                    │ linhas (defeito do   │
+  │                                                  │ limite de 200)       │
+  ├──────────────────────────────────────────────────┼──────────────────────┤
+  │ test_currency_precision.py                       │ câmbio exato em      │
+  │ (tests/test_currency_precision.py)               │ Decimal (defeito do  │
+  │                                                  │ float)               │
+  ├──────────────────────────────────────────────────┼──────────────────────┤
+  │ test_top_hotels_tiebreak.py                      │ desempate por        │
+  │ (tests/test_top_hotels_tiebreak.py)              │ hotel_id em ordem    │
+  │                                                  │ crescente            │
+  ├──────────────────────────────────────────────────┼──────────────────────┤
+  │ test_nights_year_boundary.py                     │ noites na virada de  │
+  │ (tests/test_nights_year_boundary.py)             │ ano e mês do         │
+  │                                                  │ check-in             │
+  ├──────────────────────────────────────────────────┼──────────────────────┤
+  │ test_no_billable_reservations.py                 │ relatório sem        │
+  │ (tests/test_no_billable_reservations.py)         │ nenhuma reserva      │
+  │                                                  │ CONFIRMED            │
+  ├──────────────────────────────────────────────────┼──────────────────────┤
+  │ test_full_dataset_report.py                      │ relatório completo   │
+  │ (tests/test_full_dataset_report.py)              │ do dataset real      │
+  └──────────────────────────────────────────────────┴──────────────────────┘
+
+  Os nomes seguem o tema de cada teste, e quando o tema complementa um teste
+  fornecido usei o mesmo prefixo, como test_currency_precision.py ao lado de
+  test_currency.py. A docstring de cada módulo começa com "Testes adicionais:"
+  para diferenciar dos fornecidos.
+
+  Também atualizei em declaracao.md (entrega/uso-de-ia/declaracao.md) o trecho
+  que citava o arquivo antigo.
